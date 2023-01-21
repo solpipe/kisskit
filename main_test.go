@@ -44,16 +44,11 @@ func TestClock(t *testing.T) {
 
 	target := u.Slot + 10
 
-out:
-	for u.Slot < target {
-		select {
-		case <-doneC:
-			err = errors.New("timed out")
-		case err = <-sub.ErrorC:
-			break out
-		case u = <-sub.StreamC:
-
-		}
+	signalC := clock.Alarm(target)
+	select {
+	case <-doneC:
+		err = errors.New("time out")
+	case <-signalC:
 	}
 	if err != nil {
 		t.Fatal(err)
