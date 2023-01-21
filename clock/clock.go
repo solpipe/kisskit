@@ -156,3 +156,42 @@ func (c Clock) Slot() (Update, error) {
 	}
 	return <-ansC, nil
 }
+
+type UpdateWithError struct {
+	Update Update
+	Error  error
+}
+
+// receive message when network reaches slot
+func (c Clock) Alarm(slot uint64) <-chan UpdateWithError {
+	signalC := make(chan UpdateWithError, 1)
+	go c.loopAlarm(signalC, slot)
+	return signalC
+}
+
+func (c Clock) loopAlarm(signalC chan<- UpdateWithError, target uint64) {
+	sub := c.OnSlot()
+	defer sub.Unsubscribe()
+	doneC := c.ctx.Done()
+	var u Update
+
+	for u.Slot < target {
+		select {
+		case <-doneC:
+			signalC <- UpdateWithError{
+				Error: errors.New("canceled"),
+			}
+			return
+		case err := <-sub.ErrorC:
+			signalC <- UpdateWithError{
+				Error: err,
+			}
+			return
+		case u = <-sub.StreamC:
+		}
+	}
+	signalC <- UpdateWithError{
+		Update: u,
+	}
+
+}
